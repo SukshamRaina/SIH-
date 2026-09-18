@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapContainer, TileLayer, Marker, CircleMarker, Popup, Polyline, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, CircleMarker, Popup, Polyline, Polygon, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import MapControls from './MapControls';
 import MapLegend from './MapLegend';
@@ -63,7 +63,9 @@ export default function GISMap({
   selectedHotspot,
   onSelectHotspot,
   activeClassificationFilter,
-  onSelectClassificationFilter
+  onSelectClassificationFilter,
+  activeEmergencyRoute,
+  activePlumeData
 }) {
   const [tileLayerType, setTileLayerType] = useState('satellite'); // 'satellite' | 'osm'
   const [showFacilities, setShowFacilities] = useState(true);
@@ -114,6 +116,63 @@ export default function GISMap({
         {/* Industrial Facilities Overlay Layer */}
         <IndustrialFacilityLayer facilities={facilities} visible={showFacilities} />
 
+        {/* Downwind Smoke / Toxic Plume Cone Overlay */}
+        {activePlumeData && activePlumeData.plume_polygon_geojson && (
+          <Polygon
+            positions={activePlumeData.plume_polygon_geojson.coordinates[0].map(c => [c[1], c[0]])}
+            pathOptions={{
+              color: '#dc2626',
+              fillColor: '#ef4444',
+              fillOpacity: 0.4,
+              weight: 2,
+              dashArray: '6, 6'
+            }}
+          >
+            <Tooltip permanent direction="center" opacity={0.95} className="font-mono text-[11px] bg-red-950 text-red-200 border-red-800">
+              💨 Plume Corridor ({activePlumeData.plume_reach_km} km {activePlumeData.wind_cardinal}) | Est. Exposed: {activePlumeData.estimated_exposed_population.toLocaleString()} people
+            </Tooltip>
+          </Polygon>
+        )}
+
+        {/* Capacity-Aware OSRM Emergency Response Route & Fire Station */}
+        {activeEmergencyRoute && activeEmergencyRoute.route_geojson && (
+          <>
+            <Polyline
+              positions={activeEmergencyRoute.route_geojson.coordinates.map(c => [c[1], c[0]])}
+              pathOptions={{
+                color: '#06b6d4',
+                weight: 5,
+                opacity: 0.95,
+                lineCap: 'round'
+              }}
+            >
+              <Tooltip permanent direction="top" opacity={0.95} className="font-mono text-xs bg-cyan-950 text-cyan-200 border-cyan-800">
+                🚒 OSRM Road Route: {activeEmergencyRoute.road_dist_km} km ({activeEmergencyRoute.duration_mins} mins ETA)
+              </Tooltip>
+            </Polyline>
+
+            {activeEmergencyRoute.assigned_station && (
+              <Marker
+                position={[activeEmergencyRoute.assigned_station.latitude, activeEmergencyRoute.assigned_station.longitude]}
+                icon={L.divIcon({
+                  html: `<div style="background-color: #06b6d4; border: 2px solid #ffffff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 15px; box-shadow: 0 0 12px #06b6d4;">🚒</div>`,
+                  className: 'custom-firestation-icon',
+                  iconSize: [28, 28],
+                  iconAnchor: [14, 14]
+                })}
+              >
+                <Popup className="font-sans">
+                  <div className="p-1 space-y-1 text-xs">
+                    <p className="font-bold text-cyan-400">{activeEmergencyRoute.assigned_station.name}</p>
+                    <p className="text-[11px] text-slate-300 font-mono">Type: {activeEmergencyRoute.assigned_station.type}</p>
+                    <p className="text-[11px] text-slate-300 font-mono">Capacity: {activeEmergencyRoute.assigned_station.capacity}</p>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+          </>
+        )}
+
         {/* Proximity Vector Polyline Connection */}
         {proximityVectorCoords && (
           <Polyline
@@ -130,6 +189,7 @@ export default function GISMap({
             </Tooltip>
           </Polyline>
         )}
+
 
         {/* Thermal Hotspot Markers */}
         {hotspots.map(hotspot => {

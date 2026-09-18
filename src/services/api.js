@@ -196,3 +196,145 @@ export async function getFacilities() {
   }
   return MOCK_FACILITIES;
 }
+
+/**
+ * Fetch FRP Predictive Escalation Forecast
+ * FastAPI Endpoint: GET /api/v1/hotspots/{id}/forecast
+ */
+export async function getHotspotForecast(id, hotspotData = null) {
+  if (USE_BACKEND_API) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/hotspots/${id}/forecast`);
+      if (response.ok) return await response.json();
+    } catch (err) {
+      console.warn("API Error:", err);
+    }
+  }
+  
+  // Fallback mock forecast generator
+  const frp = hotspotData?.frp || 45.0;
+  const isIndustrial = hotspotData?.classification === "Industrial Fire" || (hotspotData?.risk_score || 50) >= 70;
+  const frp_velocity = isIndustrial ? 4.2 : -1.2;
+  const status = frp_velocity > 0 ? "ESCALATING" : "STABLE";
+
+  return {
+    hotspot_id: id,
+    current_frp: frp,
+    frp_velocity: frp_velocity,
+    predicted_frp_2h: Math.max(0, Number((frp + frp_velocity * 2).toFixed(1))),
+    predicted_frp_4h: Math.max(0, Number((frp + frp_velocity * 4).toFixed(1))),
+    escalation_status: status,
+    time_to_critical_threshold_mins: frp_velocity > 0 ? Math.round(((120 - frp) / frp_velocity) * 60) : null,
+    confidence_score: 0.88,
+    recommendation: status === "ESCALATING" 
+      ? "IMMEDIATE CONTAINMENT REQUIRED: Thermal output expanding rapidly across consecutive satellite passes."
+      : "MONITOR: Thermal source appears controlled within expected operational limits."
+  };
+}
+
+/**
+ * Fetch OSRM Capacity-Aware Emergency Route
+ * FastAPI Endpoint: GET /api/v1/hotspots/{id}/emergency-route
+ */
+export async function getHotspotEmergencyRoute(id, hotspotData = null) {
+  if (USE_BACKEND_API) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/hotspots/${id}/emergency-route`);
+      if (response.ok) return await response.json();
+    } catch (err) {
+      console.warn("API Error:", err);
+    }
+  }
+
+  const lat = hotspotData?.latitude || 22.4707;
+  const lon = hotspotData?.longitude || 70.0577;
+  const facType = hotspotData?.facility_type || "Refinery";
+
+  const stationLat = lat - 0.03;
+  const stationLon = lon + 0.02;
+
+  return {
+    hotspot_id: id,
+    facility_name: hotspotData?.nearest_facility || "Industrial Complex",
+    facility_type: facType,
+    assigned_station: {
+      id: "FS-01",
+      name: `${hotspotData?.city || "Regional"} Hazmat Fire Station`,
+      type: "Hazmat Industrial Foam Unit",
+      latitude: stationLat,
+      longitude: stationLon,
+      city: hotspotData?.city || "Industrial Hub",
+      capacity: "12,000L Foam + Hazmat Tender",
+      specialization: `${facType} & High Risk Thermal Hazards`
+    },
+    match_rationale: `Matched Hazmat Foam Tender specialized for ${facType} emergency response`,
+    haversine_dist_km: 4.2,
+    road_dist_km: 5.8,
+    duration_mins: 11.5,
+    route_geojson: {
+      type: "LineString",
+      coordinates: [
+        [stationLon, stationLat],
+        [stationLon - 0.01, stationLat + 0.015],
+        [lon, lat]
+      ]
+    }
+  };
+}
+
+/**
+ * Fetch Live Downwind Toxic Plume & Population Exposure
+ * FastAPI Endpoint: GET /api/v1/hotspots/{id}/plume-exposure
+ */
+export async function getHotspotPlumeExposure(id, hotspotData = null) {
+  if (USE_BACKEND_API) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/hotspots/${id}/plume-exposure`);
+      if (response.ok) return await response.json();
+    } catch (err) {
+      console.warn("API Error:", err);
+    }
+  }
+
+  const lat = hotspotData?.latitude || 22.4707;
+  const lon = hotspotData?.longitude || 70.0577;
+  const frp = hotspotData?.frp || 45.0;
+
+  const windSpeed = 18.5;
+  const windDir = 45.0; // SW to NE plume direction
+  const downwindDeg = (windDir + 180) % 360;
+  const plumeReachKm = Math.min(10, Math.max(2, frp * 0.12 + 2));
+
+  // Helper lat/lon offset
+  const dLat = (plumeReachKm / 111.0) * Math.cos((downwindDeg * Math.PI) / 180);
+  const dLon = (plumeReachKm / (111.0 * Math.cos((lat * Math.PI) / 180))) * Math.sin((downwindDeg * Math.PI) / 180);
+
+  const polyCoords = [
+    [lon, lat],
+    [lon + dLon * 0.8 + 0.01, lat + dLat * 0.8 - 0.005],
+    [lon + dLon * 1.1, lat + dLat * 1.1],
+    [lon + dLon * 0.8 - 0.01, lat + dLat * 0.8 + 0.005],
+    [lon, lat]
+  ];
+
+  return {
+    hotspot_id: id,
+    wind_speed_kmh: windSpeed,
+    wind_direction_deg: windDir,
+    wind_cardinal: "NE",
+    plume_reach_km: Number(plumeReachKm.toFixed(1)),
+    plume_spread_angle_deg: 35.0,
+    estimated_exposed_population: Math.round(plumeReachKm * 520 + frp * 30),
+    estimated_exposed_structures: Math.round((plumeReachKm * 520 + frp * 30) / 4.1),
+    impacted_facilities: [
+      { name: `${hotspotData?.city || "Local"} Health Center & Hospital`, type: "Hospital", distance_km: 1.8, impact_level: "High" },
+      { name: `Government High School, ${hotspotData?.city || "Zone"}`, type: "School", distance_km: 2.9, impact_level: "Medium" },
+      { name: `${hotspotData?.city || "Sector"} Residential Zone 3`, type: "Residential", distance_km: 3.5, impact_level: "High" }
+    ],
+    plume_polygon_geojson: {
+      type: "Polygon",
+      coordinates: [poly_coords]
+    }
+  };
+}
+

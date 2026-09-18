@@ -26,6 +26,16 @@ export default function App() {
   const [facilities, setFacilities] = useState([]);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [selectedHotspot, setSelectedHotspot] = useState(null);
+  const [activeEmergencyRoute, setActiveEmergencyRoute] = useState(null);
+  const [activePlumeData, setActivePlumeData] = useState(null);
+
+  // Clear route/plume overlays when selected hotspot changes
+  const handleSelectHotspot = (hotspot) => {
+    setSelectedHotspot(hotspot);
+    setActiveEmergencyRoute(null);
+    setActivePlumeData(null);
+  };
+
   
   // UI State
   const [liveMode, setLiveMode] = useState(true);
@@ -218,9 +228,10 @@ export default function App() {
   const handleSelectAlert = (alert) => {
     const found = allHotspots.find(h => h.id === alert.hotspotId);
     if (found) {
-      setSelectedHotspot(found);
+      handleSelectHotspot(found);
     }
   };
+
 
   return (
     <div className="flex flex-col h-screen w-screen bg-dark-950 text-slate-100 overflow-hidden font-sans">
@@ -259,16 +270,22 @@ export default function App() {
             hotspots={filteredHotspots}
             facilities={facilities}
             selectedHotspot={selectedHotspot}
-            onSelectHotspot={setSelectedHotspot}
+            onSelectHotspot={handleSelectHotspot}
             activeClassificationFilter={filters.classification}
             onSelectClassificationFilter={(val) => setFilters({ ...filters, classification: val })}
+            activeEmergencyRoute={activeEmergencyRoute}
+            activePlumeData={activePlumeData}
           />
 
           {/* Right Hotspot Details Slide-over Panel */}
           {selectedHotspot && (
             <HotspotDetailsDrawer
               hotspot={selectedHotspot}
-              onClose={() => setSelectedHotspot(null)}
+              onClose={() => handleSelectHotspot(null)}
+              onToggleEmergencyRoute={setActiveEmergencyRoute}
+              onTogglePlume={setActivePlumeData}
+              activeEmergencyRoute={activeEmergencyRoute}
+              activePlumeData={activePlumeData}
             />
           )}
 
@@ -280,6 +297,7 @@ export default function App() {
             onSelectAlert={handleSelectAlert}
           />
         </main>
+
       </div>
 
       {/* Fullscreen Analytics Modal */}

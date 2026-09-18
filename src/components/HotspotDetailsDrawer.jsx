@@ -1,9 +1,46 @@
-import React from 'react';
-import { X, MapPin, Satellite, Factory, History, Brain, Copy, Check, ShieldAlert, Sparkles, Flame, ExternalLink } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, MapPin, Satellite, Factory, History, Brain, Copy, Check, ShieldAlert, Sparkles, Flame, TrendingUp, Navigation, Wind, Users, Hospital, Activity } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { getHotspotForecast, getHotspotEmergencyRoute, getHotspotPlumeExposure } from '../services/api';
 
-export default function HotspotDetailsDrawer({ hotspot, onClose }) {
-  const [copied, setCopied] = React.useState(false);
+export default function HotspotDetailsDrawer({
+  hotspot,
+  onClose,
+  onToggleEmergencyRoute,
+  onTogglePlume,
+  activeEmergencyRoute,
+  activePlumeData
+}) {
+  const [copied, setCopied] = useState(false);
+  const [forecast, setForecast] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null);
+  const [plumeInfo, setPlumeInfo] = useState(null);
+  const [loadingMetrics, setLoadingMetrics] = useState(false);
+
+  useEffect(() => {
+    if (!hotspot) return;
+
+    let isMounted = true;
+    setLoadingMetrics(true);
+
+    Promise.all([
+      getHotspotForecast(hotspot.id, hotspot),
+      getHotspotEmergencyRoute(hotspot.id, hotspot),
+      getHotspotPlumeExposure(hotspot.id, hotspot)
+    ]).then(([fData, rData, pData]) => {
+      if (isMounted) {
+        setForecast(fData);
+        setRouteInfo(rData);
+        setPlumeInfo(pData);
+        setLoadingMetrics(false);
+      }
+    }).catch(err => {
+      console.warn("Drawer metrics fetch error:", err);
+      if (isMounted) setLoadingMetrics(false);
+    });
+
+    return () => { isMounted = false; };
+  }, [hotspot?.id]);
 
   if (!hotspot) return null;
 
@@ -31,6 +68,9 @@ export default function HotspotDetailsDrawer({ hotspot, onClose }) {
     }
   };
 
+  const isRouteActive = activeEmergencyRoute && activeEmergencyRoute.hotspot_id === hotspot.id;
+  const isPlumeActive = activePlumeData && activePlumeData.hotspot_id === hotspot.id;
+
   return (
     <div className="absolute top-0 right-0 h-full w-full sm:w-[420px] md:w-[460px] bg-dark-900/95 backdrop-blur-xl border-l border-dark-750 shadow-2xl z-[1500] flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 select-none">
       
@@ -38,7 +78,7 @@ export default function HotspotDetailsDrawer({ hotspot, onClose }) {
       <div className="p-4 border-b border-dark-750 bg-dark-950 flex items-center justify-between">
         <div className="flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-md bg-orange-950 border border-orange-700/60 flex items-center justify-center text-orange-400 font-bold font-mono text-sm">
-            {hotspot.id.substring(8)}
+            {hotspot.id.substring(3)}
           </div>
           <div>
             <div className="flex items-center space-x-2">
@@ -108,6 +148,178 @@ export default function HotspotDetailsDrawer({ hotspot, onClose }) {
           </div>
         </div>
 
+        {/* 🌟 NEW FEATURE 1: PREDICTIVE FRP ESCALATION ENGINE */}
+        <div>
+          <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
+            <TrendingUp className="w-3.5 h-3.5" /> Predictive Escalation Engine
+          </h4>
+          <div className="bg-dark-850 border border-dark-750 rounded-lg p-3 space-y-2.5">
+            {forecast ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-mono uppercase">Escalation Trajectory</span>
+                  <span className={`px-2 py-0.5 text-[10px] font-bold font-mono rounded border ${
+                    forecast.escalation_status === 'ESCALATING' 
+                      ? 'bg-red-950 text-red-400 border-red-800 animate-pulse' 
+                      : forecast.escalation_status === 'STABLE'
+                      ? 'bg-orange-950 text-orange-400 border-orange-800'
+                      : 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                  }`}>
+                    {forecast.escalation_status === 'ESCALATING' ? '🔥 ESCALATING' : '🟢 STABLE'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 font-mono text-center pt-1 border-t border-dark-750">
+                  <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                    <span className="text-[9px] text-slate-400 block">d(FRP)/dt</span>
+                    <span className={`font-bold text-xs ${forecast.frp_velocity > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {forecast.frp_velocity > 0 ? `+${forecast.frp_velocity}` : forecast.frp_velocity} MW/h
+                    </span>
+                  </div>
+                  <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                    <span className="text-[9px] text-slate-400 block">+2h Forecast</span>
+                    <span className="font-bold text-xs text-orange-400">{forecast.predicted_frp_2h} MW</span>
+                  </div>
+                  <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                    <span className="text-[9px] text-slate-400 block">+4h Forecast</span>
+                    <span className="font-bold text-xs text-red-400">{forecast.predicted_frp_4h} MW</span>
+                  </div>
+                </div>
+
+                {forecast.time_to_critical_threshold_mins !== null && forecast.time_to_critical_threshold_mins !== undefined && (
+                  <div className="bg-red-950/60 border border-red-800/80 rounded p-2 flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-red-300">Time to Critical Danger (&gt;120 MW):</span>
+                    <span className="font-bold text-red-400">{forecast.time_to_critical_threshold_mins} mins</span>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-slate-400 font-sans italic border-l-2 border-orange-500 pl-2">
+                  {forecast.recommendation}
+                </p>
+              </>
+            ) : (
+              <div className="text-slate-400 text-center font-mono py-2">Calculating satellite trend...</div>
+            )}
+          </div>
+        </div>
+
+        {/* 🌟 NEW FEATURE 2: CAPACITY-AWARE EMERGENCY ROUTING (OSRM) */}
+        <div>
+          <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-cyan-400 mb-2 flex items-center gap-1.5">
+            <Navigation className="w-3.5 h-3.5" /> Capacity-Aware OSRM Emergency Response
+          </h4>
+          <div className="bg-dark-850 border border-cyan-950/80 border-dark-750 rounded-lg p-3 space-y-2.5">
+            {routeInfo ? (
+              <>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-mono block">Designated Fire Station</span>
+                    <h5 className="font-bold text-slate-100 text-xs">{routeInfo.assigned_station.name}</h5>
+                    <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-cyan-950 text-cyan-400 border border-cyan-800/80 rounded inline-block mt-1">
+                      🚒 {routeInfo.assigned_station.type}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 font-mono text-xs pt-1 border-t border-dark-750">
+                  <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                    <span className="text-[9px] text-slate-400 block">OSRM Road Distance</span>
+                    <span className="font-bold text-cyan-400 text-sm">{routeInfo.road_dist_km} km</span>
+                    <span className="text-[9px] text-slate-500 block">vs {routeInfo.haversine_dist_km} km straight</span>
+                  </div>
+                  <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                    <span className="text-[9px] text-slate-400 block">Emergency Drive ETA</span>
+                    <span className="font-bold text-emerald-400 text-sm">{routeInfo.duration_mins} mins</span>
+                    <span className="text-[9px] text-slate-500 block">OSRM Network Speed</span>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-400 font-mono">
+                  <span className="text-cyan-400 font-bold">Match Rationale:</span> {routeInfo.match_rationale}
+                </p>
+
+                <button
+                  onClick={() => onToggleEmergencyRoute(isRouteActive ? null : routeInfo)}
+                  className={`w-full py-1.5 font-mono text-[11px] font-bold rounded transition-colors flex items-center justify-center gap-1.5 ${
+                    isRouteActive 
+                      ? 'bg-cyan-950 text-cyan-300 border border-cyan-700' 
+                      : 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                  }`}
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>{isRouteActive ? 'Hide OSRM Route Polyline' : 'Show OSRM Response Route on GIS Map'}</span>
+                </button>
+              </>
+            ) : (
+              <div className="text-slate-400 text-center font-mono py-2">Querying OSRM road network...</div>
+            )}
+          </div>
+        </div>
+
+        {/* 🌟 NEW FEATURE 3: DOWNWIND TOXIC PLUME & COMMUNITY EXPOSURE MODELING */}
+        <div>
+          <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-red-400 mb-2 flex items-center gap-1.5">
+            <Wind className="w-3.5 h-3.5" /> Toxic Plume & Community Exposure
+          </h4>
+          <div className="bg-dark-850 border border-red-950/80 border-dark-750 rounded-lg p-3 space-y-2.5">
+            {plumeInfo ? (
+              <>
+                <div className="grid grid-cols-2 gap-2 font-mono text-xs">
+                  <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                    <span className="text-[9px] text-slate-400 block">Wind Vector (Open-Meteo)</span>
+                    <span className="font-bold text-slate-100 text-xs">{plumeInfo.wind_speed_kmh} km/h</span>
+                    <span className="text-[9px] text-orange-400 font-bold block">{plumeInfo.wind_cardinal} ({plumeInfo.wind_direction_deg}°)</span>
+                  </div>
+                  <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                    <span className="text-[9px] text-slate-400 block">Downwind Corridor</span>
+                    <span className="font-bold text-red-400 text-xs">{plumeInfo.plume_reach_km} km</span>
+                    <span className="text-[9px] text-slate-500 block">35° Dispersion Wedge</span>
+                  </div>
+                </div>
+
+                <div className="bg-red-950/50 border border-red-900/80 rounded p-2.5 space-y-1">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-red-300 font-semibold flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5 text-red-400" /> Estimated Exposed Citizens:
+                    </span>
+                    <span className="font-bold text-red-400 text-sm">~{plumeInfo.estimated_exposed_population.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                    <span>Impacted Residential Structures:</span>
+                    <span className="font-bold text-slate-200">~{plumeInfo.estimated_exposed_structures.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {plumeInfo.impacted_facilities && plumeInfo.impacted_facilities.length > 0 && (
+                  <div className="space-y-1 pt-1 font-mono text-[10px]">
+                    <span className="text-slate-400 block font-bold">Sensors & Critical Facilities in Corridor:</span>
+                    {plumeInfo.impacted_facilities.map((fac, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-dark-950 px-2 py-1 rounded border border-dark-750 text-slate-300">
+                        <span>{fac.type === 'Hospital' ? '🏥' : fac.type === 'School' ? '🏫' : '🏘️'} {fac.name}</span>
+                        <span className="text-red-400 font-bold">{fac.distance_km} km ({fac.impact_level})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => onTogglePlume(isPlumeActive ? null : plumeInfo)}
+                  className={`w-full py-1.5 font-mono text-[11px] font-bold rounded transition-colors flex items-center justify-center gap-1.5 ${
+                    isPlumeActive 
+                      ? 'bg-red-950 text-red-300 border border-red-700' 
+                      : 'bg-red-600 hover:bg-red-500 text-white'
+                  }`}
+                >
+                  <Wind className="w-3.5 h-3.5" />
+                  <span>{isPlumeActive ? 'Hide Toxic Smoke Plume' : 'Show Downwind Smoke Plume on Map'}</span>
+                </button>
+              </>
+            ) : (
+              <div className="text-slate-400 text-center font-mono py-2">Fetching live wind dispersion model...</div>
+            )}
+          </div>
+        </div>
+
         {/* 2. LOCATION METRICS */}
         <div>
           <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
@@ -173,54 +385,10 @@ export default function HotspotDetailsDrawer({ hotspot, onClose }) {
               <span className="text-[10px] text-slate-400 block">Fire Power (FRP)</span>
               <span className="text-red-400 font-bold text-xs">{hotspot.frp} MW</span>
             </div>
-            <div>
-              <span className="text-[10px] text-slate-400 block">Day / Night Pass</span>
-              <span className="text-slate-200 font-semibold">{hotspot.daynight === 'D' ? '☀️ Day Pass' : '🌙 Night Pass'}</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 block">Raw Schema</span>
-              <span className="text-cyan-400 text-[10px] underline cursor-pointer">MODIS_C61_FIRMS</span>
-            </div>
           </div>
         </div>
 
-        {/* 4. GEOGRAPHIC & INFRASTRUCTURE CONTEXT */}
-        <div>
-          <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
-            <Factory className="w-3.5 h-3.5" /> Spatial Infrastructure Context
-          </h4>
-          <div className="bg-dark-850 border border-dark-750 rounded-lg p-3 space-y-2">
-            {hotspot.distance_km <= 2.0 && (
-              <div className="flex items-center space-x-2 px-2.5 py-1.5 bg-red-950/80 border border-red-800 rounded text-red-300 font-mono text-[11px]">
-                <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
-                <span className="font-bold">Industrial Proximity Alert Detected!</span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 font-mono text-xs pt-1">
-              <div>
-                <span className="text-[10px] text-slate-400 block">Nearest Facility</span>
-                <span className="text-slate-100 font-bold">{hotspot.nearest_facility}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Facility Type</span>
-                <span className="text-slate-200 font-semibold">{hotspot.facility_type}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Distance to Plant</span>
-                <span className={`font-bold ${hotspot.distance_km <= 2.0 ? 'text-red-400' : 'text-slate-200'}`}>
-                  {hotspot.distance_km} km
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Land Cover Type</span>
-                <span className="text-slate-200">{hotspot.land_cover}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 5. HISTORICAL ACTIVITY */}
+        {/* 4. HISTORICAL ACTIVITY */}
         <div>
           <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
             <History className="w-3.5 h-3.5" /> Historical Telemetry & Persistence
@@ -241,7 +409,6 @@ export default function HotspotDetailsDrawer({ hotspot, onClose }) {
               </div>
             </div>
 
-            {/* Sparkline Recharts Bar Chart */}
             {hotspot.historical_trend && (
               <div>
                 <span className="text-[10px] font-mono text-slate-400 block mb-1">FRP Intensity Trend (MW)</span>
@@ -262,7 +429,7 @@ export default function HotspotDetailsDrawer({ hotspot, onClose }) {
           </div>
         </div>
 
-        {/* 6. AI ANALYSIS & EXPLANATION */}
+        {/* 5. AI ANALYSIS & EXPLANATION */}
         <div>
           <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
             <Brain className="w-3.5 h-3.5 text-orange-400" /> AI Classification Rationale
@@ -286,7 +453,7 @@ export default function HotspotDetailsDrawer({ hotspot, onClose }) {
 
       {/* Drawer Footer Actions */}
       <div className="p-3 border-t border-dark-750 bg-dark-950 flex items-center justify-between font-mono text-xs">
-        <span className="text-slate-400 text-[10px]">Status: Active Anomaly</span>
+        <span className="text-slate-400 text-[10px]">Status: Active Intelligence Monitoring</span>
         <button
           onClick={onClose}
           className="px-3 py-1.5 bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 rounded transition-colors"
@@ -297,3 +464,4 @@ export default function HotspotDetailsDrawer({ hotspot, onClose }) {
     </div>
   );
 }
+

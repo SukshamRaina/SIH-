@@ -69,6 +69,7 @@ export default function GISMap({
 }) {
   const [tileLayerType, setTileLayerType] = useState('satellite'); // 'satellite' | 'osm'
   const [showFacilities, setShowFacilities] = useState(true);
+  const [showHotspots, setShowHotspots] = useState(true);
 
   const TILE_URLS = {
     satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -192,7 +193,7 @@ export default function GISMap({
 
 
         {/* Thermal Hotspot Markers */}
-        {hotspots.map(hotspot => {
+        {showHotspots && hotspots.map(hotspot => {
           const isSelected = selectedHotspot?.id === hotspot.id;
           const color = getHotspotColor(hotspot.classification);
 
@@ -223,15 +224,13 @@ export default function GISMap({
                 <Popup className="font-sans">
                   <div className="p-1 space-y-1.5 min-w-[200px]">
                     <div className="flex items-center justify-between border-b border-dark-750 pb-1">
-                      <span className="font-mono font-bold text-xs text-orange-400">{hotspot.id}</span>
+                      <span className="font-sans font-bold text-xs text-slate-100">{hotspot.classification}</span>
                       <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${
                         hotspot.risk_level === 'High' ? 'bg-red-950 text-red-400 border border-red-800' : 'bg-orange-950 text-orange-400'
                       }`}>
                         {hotspot.risk_level} Risk ({hotspot.risk_score})
                       </span>
                     </div>
-
-                    <p className="text-xs font-bold text-slate-100">{hotspot.classification}</p>
 
                     <div className="text-[11px] text-slate-300 space-y-0.5 font-mono">
                       <p>FRP: <span className="text-orange-400 font-bold">{hotspot.frp} MW</span></p>
@@ -268,15 +267,13 @@ export default function GISMap({
               <Popup className="font-sans">
                 <div className="p-1 space-y-1.5 min-w-[200px]">
                   <div className="flex items-center justify-between border-b border-dark-750 pb-1">
-                    <span className="font-mono font-bold text-xs text-orange-400">{hotspot.id}</span>
+                    <span className="font-sans font-bold text-xs text-slate-100">{hotspot.classification}</span>
                     <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${
                       hotspot.risk_level === 'High' ? 'bg-red-950 text-red-400 border border-red-800' : 'bg-orange-950 text-orange-400'
                     }`}>
                       {hotspot.risk_level} Risk ({hotspot.risk_score})
                     </span>
                   </div>
-
-                  <p className="text-xs font-bold text-slate-100">{hotspot.classification}</p>
 
                   <div className="text-[11px] text-slate-300 space-y-0.5 font-mono">
                     <p>FRP: <span className="text-orange-400 font-bold">{hotspot.frp} MW</span></p>
@@ -303,6 +300,8 @@ export default function GISMap({
           onTileLayerChange={setTileLayerType}
           showFacilities={showFacilities}
           onToggleFacilities={() => setShowFacilities(!showFacilities)}
+          showHotspots={showHotspots}
+          onToggleHotspots={() => setShowHotspots(!showHotspots)}
           selectedHotspot={selectedHotspot}
         />
       </MapContainer>

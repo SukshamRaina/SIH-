@@ -113,121 +113,165 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 HOTSPOTS_DB: List[Dict[str, Any]] = []
 
-def load_hotspots_from_csv():
-    csv_paths = [
-        os.path.join(os.path.dirname(__file__), "hotspots_data.csv"),
-        os.path.join(os.path.dirname(__file__), "..", "hotspots_data.csv")
-    ]
-    
-    target_path = None
-    for p in csv_paths:
-        if os.path.exists(p):
-            target_path = p
-            break
+def get_state_and_city(lat: float, lon: float):
+    if lat >= 31.5:
+        return ('Jammu & Kashmir', 'Srinagar / Anantnag') if lon < 76.5 else ('Himachal Pradesh', 'Shimla / Mandi')
+    if lat >= 28.5 and lon < 77.0:
+        return ('Punjab', 'Ludhiana / Patiala') if lat >= 30.0 else ('Haryana', 'Hisar / Karnal')
+    if lat >= 25.5 and lon >= 77.0 and lon < 84.5:
+        if lat >= 28.0 and lon < 78.0:
+            return ('Delhi NCR', 'New Delhi')
+        return ('Uttar Pradesh', 'Mathura / Kanpur') if lat >= 26.5 else ('Uttar Pradesh', 'Varanasi / Prayagraj')
+    if lat >= 24.5 and lon < 77.0:
+        return ('Rajasthan', 'Jaipur / Jodhpur')
+    if lat >= 20.0 and lon < 74.5:
+        return ('Gujarat', 'Jamnagar / Ahmedabad') if lat >= 22.0 else ('Gujarat', 'Ankleshwar / Surat')
+    if lat >= 21.2 and lat < 26.5 and lon >= 74.5 and lon < 82.0:
+        return ('Madhya Pradesh', 'Bhopal / Gwalior') if lat >= 23.5 else ('Madhya Pradesh', 'Singrauli / Indore')
+    if lat >= 17.8 and lat < 24.2 and lon >= 80.5 and lon < 84.5:
+        return ('Chhattisgarh', 'Bhilai / Raipur') if lat >= 20.5 else ('Chhattisgarh', 'Jagdalpur')
+    if lat >= 17.5 and lon >= 82.5 and lon < 87.5:
+        return ('Odisha', 'Rourkela / Jharsuguda')
+    if lat >= 21.5 and lon >= 84.5:
+        return ('West Bengal', 'Haldia / Asansol') if lon >= 87.0 else ('Jharkhand', 'Jamshedpur / Dhanbad')
+    if lat >= 15.6 and lat < 22.0 and lon < 80.5:
+        if lon < 74.0:
+            return ('Maharashtra', 'Mumbai / Raigad')
+        return ('Maharashtra', 'Chandrapur / Nagpur') if lat >= 19.5 else ('Maharashtra', 'Pune / Nashik')
+    if lat >= 15.8 and lat < 19.8 and lon >= 77.0 and lon < 81.5:
+        return ('Telangana', 'Hyderabad / Ramagundam')
+    if lat >= 12.5 and lat < 19.0 and lon >= 76.5:
+        return ('Andhra Pradesh', 'Visakhapatnam / Vijayawada')
+    if lat >= 11.5 and lon < 78.5:
+        return ('Karnataka', 'Bengaluru / Mangaluru')
+    return ('India', 'Industrial Zone')
 
-    if not target_path:
-        print("Warning: hotspots_data.csv not found, using fallback synthetic database.")
+def load_hotspots_from_csv():
+    firms_path = os.path.join(os.path.dirname(__file__), "..", "firms_raw_rows.csv")
+    osm_path = os.path.join(os.path.dirname(__file__), "..", "hotspot_features_rows_cleaned.csv")
+    fallback_path = os.path.join(os.path.dirname(__file__), "hotspots_data.csv")
+
+    if os.path.exists(firms_path) and os.path.exists(osm_path):
+        print(f"Loading & Joining: {firms_path} + {osm_path}")
+        osm_map = {}
+        with open(osm_path, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                hid = row.get("hotspot_id")
+                if hid and hid not in osm_map:
+                    osm_map[hid] = row
+
+        joined_map = {}
+        with open(firms_path, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for frow in reader:
+                hid = frow.get("hotspot_id")
+                if hid and hid in osm_map and hid not in joined_map:
+                    orow = osm_map[hid]
+                    try:
+                        lat = float(frow.get("latitude") or orow.get("latitude"))
+                        lon = float(frow.get("longitude") or orow.get("longitude"))
+                        frp = float(frow.get("frp") or orow.get("mean_frp") or 0.0)
+                        bright = float(frow.get("bright_ti4") or orow.get("mean_bright_ti4") or 300.0)
+
+                        conf_str = str(frow.get("confidence", "")).lower()
+                        conf_val = 95 if conf_str in ["h", "high"] else (80 if conf_str in ["n", "medium"] else 75)
+
+                        persistence_val = float(orow.get("persistence_30d") or 0.05)
+                        classification = "Industrial Fire" if persistence_val >= 0.15 else ("Persistent Thermal Source" if persistence_val >= 0.05 or frp >= 10.0 else "Agricultural Burning")
+
+                        risk_score = min(99, max(20, int(frp * 2.5 + conf_val * 0.4 + persistence_val * 50)))
+                        risk_level = "High" if risk_score >= 70 else ("Medium" if risk_score >= 45 else "Low")
+
+                        fire_station = orow.get("nearest_fire_station_name") or "CMC fire station"
+                        fire_dist_m = float(orow.get("distance_to_nearest_fire_station_m") or 18500)
+                        dist_km = round(fire_dist_m / 1000.0, 1) if fire_dist_m > 0 else 18.5
+
+                        acq_time = str(frow.get("acq_time", "1200")).zfill(4)
+                        time_formatted = f"{acq_time[:2]}:{acq_time[2:]}" if len(acq_time) == 4 else acq_time
+
+                        st, ct = get_state_and_city(lat, lon)
+                        city_name = fire_station if fire_station and fire_station != "N/A" else ct
+
+                        joined_record = {
+                            "id": f"HS-{hid}",
+                            "hotspot_id": hid,
+                            "latitude": lat,
+                            "longitude": lon,
+                            "classification": classification,
+                            "ai_confidence": round(conf_val / 100.0, 2),
+                            "risk_score": risk_score,
+                            "risk_level": risk_level,
+                            "acq_date": frow.get("acq_date") or orow.get("last_seen_date") or "2026-08-01",
+                            "acq_time": time_formatted,
+                            "satellite": frow.get("satellite") or "VIIRS",
+                            "instrument": frow.get("instrument") or "VIIRS",
+                            "confidence": conf_val,
+                            "brightness": bright,
+                            "frp": frp,
+                            "daynight": frow.get("daynight") or "D",
+                            "country": "India",
+                            "state": st,
+                            "city": city_name,
+                            "nearest_facility": fire_station,
+                            "facility_type": "Fire Station",
+                            "distance_km": dist_km,
+                            "persistence": round(persistence_val, 2),
+                            "firms": frow,
+                            "osm": orow,
+                            "ai_rationale": [
+                                f"INNER JOIN matched FIRMS telemetry with OSM features for hotspot_id: {hid}",
+                                f"FRP output: {frp} MW (Sensor {frow.get('satellite', 'VIIRS')})",
+                                f"Nearest Fire Station: {fire_station} ({dist_km} km)"
+                            ]
+                        }
+                        joined_map[hid] = joined_record
+                    except Exception:
+                        continue
+
+        HOTSPOTS_DB.extend(joined_map.values())
+        print(f"INNER JOIN complete: Loaded {len(joined_map)} matched hotspot records into HOTSPOTS_DB.")
         return
 
-    print(f"Loading telemetry hotspots from: {target_path}")
-    count = 0
-
-    with open(target_path, mode="r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            try:
-                lat = float(row["latitude"])
-                lon = float(row["longitude"])
-                frp = float(row["frp"]) if row.get("frp") else 0.0
-                bright = float(row["bright_ti4"]) if row.get("bright_ti4") else 300.0
-                row_id = row.get("id", str(count + 1))
-
-                # Distance to closest facility
-                min_dist = float("inf")
-                closest_fac = FACILITIES_DB[0]
-                for fac in FACILITIES_DB:
-                    d = haversine(lat, lon, fac["latitude"], fac["longitude"])
-                    if d < min_dist:
-                        min_dist = d
-                        closest_fac = fac
-
-                dist_km = round(min_dist, 1)
-
-                conf_str = str(row.get("confidence", "")).lower()
-                if conf_str == "h":
-                    conf_val = 95
-                elif conf_str == "n":
-                    conf_val = 80
-                elif conf_str == "l":
-                    conf_val = 60
-                else:
-                    try:
-                        conf_val = int(row.get("confidence", 75))
-                    except ValueError:
-                        conf_val = 75
-
-                if count >= 7000:
-                    break
-
-                if dist_km <= 12.0 and frp >= 3.0:
-                    classification = "Industrial Fire"
-                elif frp >= 12.0 or dist_km <= 25.0:
-                    classification = "Persistent Thermal Source"
-                elif row.get("daynight") == "N" or frp > 6.0:
-                    classification = "Forest / Wildfire"
-                else:
-                    classification = "Agricultural Burning"
-
-                risk_score = min(99, max(20, int(frp * 2.0 + conf_val * 0.4 - min(dist_km, 50) * 0.5)))
-                risk_level = "High" if risk_score >= 70 else ("Medium" if risk_score >= 45 else "Low")
-
-                acq_time = str(row.get("acq_time", "1200")).zfill(4)
-                time_formatted = f"{acq_time[:2]}:{acq_time[2:]}" if len(acq_time) == 4 else acq_time
-
-                HOTSPOTS_DB.append({
-                    "id": f"HS-{row_id}",
-                    "latitude": lat,
-                    "longitude": lon,
-                    "classification": classification,
-                    "ai_confidence": round(conf_val / 100.0, 2),
-                    "risk_score": risk_score,
-                    "risk_level": risk_level,
-                    "acq_date": row.get("acq_date", "2026-08-01"),
-                    "acq_time": time_formatted,
-                    "satellite": row.get("satellite", "VIIRS"),
-                    "instrument": row.get("instrument", "VIIRS"),
-                    "confidence": conf_val,
-                    "brightness": bright,
-                    "frp": frp,
-                    "daynight": row.get("daynight", "D"),
-                    "country": "India",
-                    "state": closest_fac["state"],
-                    "city": closest_fac["city"],
-                    "nearest_facility": closest_fac["name"],
-                    "facility_type": closest_fac["type"],
-                    "distance_km": dist_km,
-                    "land_cover": "Industrial / Built-up" if dist_km <= 12.0 else "Vegetation / Mixed",
-                    "total_detections": 15 if classification in ["Persistent Thermal Source", "Industrial Fire"] else 4,
-                    "active_days": 8 if classification in ["Persistent Thermal Source", "Industrial Fire"] else 2,
-                    "persistence": round(min(0.99, max(0.1, 0.5 + frp / 100.0 - dist_km / 100.0)), 2),
-                    "first_detected": "2026-08-01",
-                    "last_detected": row.get("acq_date", "2026-08-11"),
-                    "ai_rationale": [
-                        f"Satellite thermal pixel matches {classification} signature",
-                        f"Spatial proximity of {dist_km} km to {closest_fac['name']}",
-                        f"FRP Intensity: {frp} MW (Sensor {row.get('satellite')})"
-                    ],
-                    "historical_trend": [
-                        {"date": "08-01", "frp": int(frp * 0.8), "count": 2},
-                        {"date": "08-05", "frp": int(frp * 0.9), "count": 3},
-                        {"date": "08-11", "frp": int(frp), "count": 5}
-                    ]
-                })
-                count += 1
-            except Exception as e:
-                continue
-
-    print(f"Successfully loaded {len(HOTSPOTS_DB)} hotspot telemetry records.")
+    # Fallback to single CSV if needed
+    if os.path.exists(fallback_path):
+        print(f"Loading fallback telemetry hotspots from: {fallback_path}")
+        with open(fallback_path, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    lat = float(row["latitude"])
+                    lon = float(row["longitude"])
+                    frp = float(row["frp"]) if row.get("frp") else 0.0
+                    bright = float(row["bright_ti4"]) if row.get("bright_ti4") else 300.0
+                    row_id = row.get("id", "0")
+                    HOTSPOTS_DB.append({
+                        "id": f"HS-{row_id}",
+                        "latitude": lat,
+                        "longitude": lon,
+                        "classification": "Industrial Fire",
+                        "ai_confidence": 0.9,
+                        "risk_score": 80,
+                        "risk_level": "High",
+                        "acq_date": row.get("acq_date", "2026-08-01"),
+                        "acq_time": "12:00",
+                        "satellite": "VIIRS",
+                        "instrument": "VIIRS",
+                        "confidence": 90,
+                        "brightness": bright,
+                        "frp": frp,
+                        "daynight": "D",
+                        "country": "India",
+                        "state": "Gujarat",
+                        "city": "Ankleshwar",
+                        "nearest_facility": "Ankleshwar GIDC",
+                        "facility_type": "Chemical Plant",
+                        "distance_km": 1.2,
+                        "persistence": 0.85,
+                        "ai_rationale": ["Thermal detection near industrial area"]
+                    })
+                except Exception:
+                    continue
 
 load_hotspots_from_csv()
 

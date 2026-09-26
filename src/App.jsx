@@ -7,7 +7,8 @@ import HotspotDetailsDrawer from './components/HotspotDetailsDrawer';
 import AnalyticsModal from './components/AnalyticsModal';
 import SihInfoModal from './components/SihInfoModal';
 import NotificationsPopover from './components/NotificationsPopover';
-import { getHotspots, getFacilities, getStatistics, getAnalytics } from './services/api';
+import { getFacilities } from './services/api';
+import { parseCSV, joinDatasets } from './utils/csvProcessor';
 
 const DEFAULT_FILTERS = {
   startDate: "2026-08-01",
@@ -29,6 +30,16 @@ export default function App() {
   const [activeEmergencyRoute, setActiveEmergencyRoute] = useState(null);
   const [activePlumeData, setActivePlumeData] = useState(null);
 
+  // CSV Datasets & Record Count State
+  const [firmsCount, setFirmsCount] = useState(0);
+  const [osmCount, setOsmCount] = useState(0);
+  const [matchedCount, setMatchedCount] = useState(0);
+  const [isLoadingCSVs, setIsLoadingCSVs] = useState(true);
+
+  // Cached CSV String Texts
+  const [firmsCSVText, setFirmsCSVText] = useState(null);
+  const [osmCSVText, setOsmCSVText] = useState(null);
+
   // Clear route/plume overlays when selected hotspot changes
   const handleSelectHotspot = (hotspot) => {
     setSelectedHotspot(hotspot);
@@ -36,14 +47,13 @@ export default function App() {
     setActivePlumeData(null);
   };
 
-  
   // UI State
   const [liveMode, setLiveMode] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isSihInfoOpen, setIsSihInfoOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  
+
   // Simulated Notifications Feed
   const [alerts, setAlerts] = useState([
     {
@@ -72,17 +82,85 @@ export default function App() {
     }
   ]);
 
-  // Initial Data Load
+  // Initial Data Load (Facilities + FIRMS & OSM CSV Fetch & Inner Join)
   useEffect(() => {
     async function loadInitialData() {
-      const facilitiesData = await getFacilities();
-      setFacilities(facilitiesData);
+      setIsLoadingCSVs(true);
+      try {
+        const facilitiesData = await getFacilities();
+        setFacilities(facilitiesData);
 
-      const hotspotsData = await getHotspots();
-      setAllHotspots(hotspotsData);
+        // Fetch bundled CSV files
+        const [firmsRes, osmRes] = await Promise.all([
+          fetch('/firms_raw_rows.csv'),
+          fetch('/hotspot_features_rows_cleaned.csv')
+        ]);
+
+        const fText = await firmsRes.text();
+        const oText = await osmRes.text();
+
+        setFirmsCSVText(fText);
+        setOsmCSVText(oText);
+
+        const firmsRows = parseCSV(fText);
+        const osmRows = parseCSV(oText);
+
+        const joined = joinDatasets(firmsRows, osmRows);
+
+        setAllHotspots(joined.joinedHotspots);
+        setFirmsCount(joined.firmsCount);
+        setOsmCount(joined.osmCount);
+        setMatchedCount(joined.matchedCount);
+      } catch (err) {
+        console.error("Error loading CSV telemetry datasets:", err);
+      } finally {
+        setIsLoadingCSVs(false);
+      }
     }
     loadInitialData();
   }, []);
+
+  // Handle User CSV File Uploads (FIRMS)
+  const handleUploadFirmsCSV = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      setFirmsCSVText(text);
+      if (osmCSVText) {
+        setIsLoadingCSVs(true);
+        const firmsRows = parseCSV(text);
+        const osmRows = parseCSV(osmCSVText);
+        const joined = joinDatasets(firmsRows, osmRows);
+        setAllHotspots(joined.joinedHotspots);
+        setFirmsCount(joined.firmsCount);
+        setOsmCount(joined.osmCount);
+        setMatchedCount(joined.matchedCount);
+        setIsLoadingCSVs(false);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Handle User CSV File Uploads (OSM)
+  const handleUploadOsmCSV = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      setOsmCSVText(text);
+      if (firmsCSVText) {
+        setIsLoadingCSVs(true);
+        const firmsRows = parseCSV(firmsCSVText);
+        const osmRows = parseCSV(text);
+        const joined = joinDatasets(firmsRows, osmRows);
+        setAllHotspots(joined.joinedHotspots);
+        setFirmsCount(joined.firmsCount);
+        setOsmCount(joined.osmCount);
+        setMatchedCount(joined.matchedCount);
+        setIsLoadingCSVs(false);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // Filter Calculation
   const filteredHotspots = useMemo(() => {
@@ -134,7 +212,7 @@ export default function App() {
     const persistentSources = filteredHotspots.filter(h => h.classification === "Persistent Thermal Source").length;
     const highRisk = filteredHotspots.filter(h => h.risk_level === "High").length;
     const activeToday = filteredHotspots.filter(h => h.acq_date === "2026-09-05").length;
-    
+
     const totalFrp = filteredHotspots.reduce((sum, h) => sum + (h.frp || 0), 0);
     const avgFrp = total > 0 ? (totalFrp / total).toFixed(1) : "0.0";
 
@@ -235,7 +313,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-dark-950 text-slate-100 overflow-hidden font-sans">
-      
+
       {/* Top Navbar */}
       <Navbar
         liveMode={liveMode}
@@ -248,12 +326,20 @@ export default function App() {
         unreadAlertCount={alerts.length}
       />
 
-      {/* Dynamic Summary KPI Cards */}
-      <StatisticsCards statistics={statistics} />
+      {/* Dynamic Summary KPI Cards & Dataset Counts */}
+      <StatisticsCards
+        firmsCount={firmsCount}
+        osmCount={osmCount}
+        matchedCount={matchedCount}
+        statistics={statistics}
+        onUploadFirmsCSV={handleUploadFirmsCSV}
+        onUploadOsmCSV={handleUploadOsmCSV}
+        isLoadingCSVs={isLoadingCSVs}
+      />
 
       {/* Main Workspace Area (Sidebar + GIS Map + Hotspot Drawer) */}
       <div className="flex-1 flex overflow-hidden relative">
-        
+
         {/* Left Filter Sidebar */}
         <Sidebar
           filters={filters}

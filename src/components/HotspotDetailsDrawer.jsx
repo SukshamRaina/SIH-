@@ -77,12 +77,12 @@ export default function HotspotDetailsDrawer({
       {/* Drawer Header */}
       <div className="p-4 border-b border-dark-750 bg-dark-950 flex items-center justify-between">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-md bg-orange-950 border border-orange-700/60 flex items-center justify-center text-orange-400 font-bold font-mono text-sm">
-            {hotspot.id.substring(3)}
+          <div className="w-8 h-8 rounded-md bg-orange-950 border border-orange-700/60 flex items-center justify-center text-orange-400 font-bold text-base">
+            🔥
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className="font-mono font-bold text-sm text-slate-100">{hotspot.id}</span>
+              <span className="font-sans font-bold text-sm text-slate-100">{hotspot.classification}</span>
               <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded border ${getRiskBadgeColor(hotspot.risk_level)}`}>
                 {hotspot.risk_level} Risk
               </span>
@@ -355,77 +355,124 @@ export default function HotspotDetailsDrawer({
           </div>
         </div>
 
-        {/* 3. NASA FIRMS DATA */}
+        {/* 🔥 3. NASA FIRMS DETECTION TELEMETRY */}
         <div>
           <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
-            <Satellite className="w-3.5 h-3.5" /> NASA FIRMS Telemetry
+            <Satellite className="w-3.5 h-3.5" /> 🔥 FIRMS Detection
           </h4>
-          <div className="bg-dark-850 border border-dark-750 rounded-lg p-3 grid grid-cols-2 gap-3 font-mono">
-            <div>
-              <span className="text-[10px] text-slate-400 block">Detection Date</span>
-              <span className="text-slate-100 font-semibold">{hotspot.acq_date}</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 block">Detection Time</span>
-              <span className="text-slate-100 font-semibold">{hotspot.acq_time} UTC</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 block">Satellite / Sensor</span>
-              <span className="text-slate-100 font-semibold">{hotspot.satellite} ({hotspot.instrument})</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 block">NASA Confidence</span>
-              <span className="text-emerald-400 font-bold">{hotspot.confidence}%</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 block">Brightness Temp</span>
-              <span className="text-yellow-400 font-bold">{hotspot.brightness} K</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 block">Fire Power (FRP)</span>
-              <span className="text-red-400 font-bold text-xs">{hotspot.frp} MW</span>
+          <div className="bg-dark-850 border border-dark-750 rounded-lg p-3 space-y-2.5">
+            <div className="grid grid-cols-2 gap-2.5 font-mono text-xs">
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Acquisition Date</span>
+                <span className="text-slate-100 font-semibold">{hotspot.firms?.acq_date || hotspot.acq_date || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Acquisition Time</span>
+                <span className="text-slate-100 font-semibold">{hotspot.firms?.acq_time || hotspot.acq_time || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Satellite / Sensor</span>
+                <span className="text-slate-100 font-semibold">{hotspot.firms?.satellite || hotspot.satellite || 'N/A'} ({hotspot.firms?.instrument || hotspot.instrument || 'VIIRS'})</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Confidence Level</span>
+                <span className="text-emerald-400 font-bold">{hotspot.firms?.confidence || `${hotspot.confidence}%` || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Fire Radiative Power</span>
+                <span className="text-red-400 font-bold">{hotspot.firms?.frp || `${hotspot.frp} MW` || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Brightness Temp (I4)</span>
+                <span className="text-yellow-400 font-bold">{hotspot.firms?.bright_ti4 || `${hotspot.brightness} K` || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Brightness Temp (I5)</span>
+                <span className="text-slate-200">{hotspot.firms?.bright_ti5 || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Day / Night Pass</span>
+                <span className="text-slate-200">{hotspot.firms?.daynight || hotspot.daynight || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Scan / Track</span>
+                <span className="text-slate-300">{hotspot.firms?.scan || 'N/A'} / {hotspot.firms?.track || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Algorithm Version</span>
+                <span className="text-slate-300">{hotspot.firms?.version || 'N/A'}</span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* 4. HISTORICAL ACTIVITY */}
+        {/* 🏭 4. OSM / GEOGRAPHIC CONTEXT */}
         <div>
-          <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
-            <History className="w-3.5 h-3.5" /> Historical Telemetry & Persistence
+          <h4 className="text-[11px] font-bold font-mono uppercase tracking-wider text-cyan-400 mb-2 flex items-center gap-1.5">
+            <Factory className="w-3.5 h-3.5" /> 🏭 OSM / Geographic Context
           </h4>
-          <div className="bg-dark-850 border border-dark-750 rounded-lg p-3 space-y-3">
-            <div className="grid grid-cols-3 gap-2 text-center font-mono border-b border-dark-750 pb-2">
-              <div className="bg-dark-950 p-1.5 rounded border border-dark-750">
-                <span className="text-[10px] text-slate-400 block">Total Passes</span>
-                <span className="text-sm font-bold text-white">{hotspot.total_detections}</span>
+          <div className="bg-dark-850 border border-dark-750 rounded-lg p-3 space-y-3 font-mono text-xs">
+            {/* Fire Station Information */}
+            <div className="bg-dark-950 p-2.5 rounded border border-dark-750 space-y-1">
+              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">Nearest Fire Station</span>
+              <div className="flex items-center justify-between text-slate-100 font-bold">
+                <span>{hotspot.osm?.nearest_fire_station_name || hotspot.nearest_facility || 'CMC fire station'}</span>
+                <span className="text-cyan-400">{hotspot.osm?.distance_to_nearest_fire_station_m || `${hotspot.distance_km} km`}</span>
               </div>
-              <div className="bg-dark-950 p-1.5 rounded border border-dark-750">
-                <span className="text-[10px] text-slate-400 block">Active Days</span>
-                <span className="text-sm font-bold text-white">{hotspot.active_days}</span>
+              {hotspot.osm?.nearest_fire_station_latitude && hotspot.osm?.nearest_fire_station_latitude !== 'N/A' && (
+                <p className="text-[10px] text-slate-400">
+                  Coords: {hotspot.osm.nearest_fire_station_latitude} N, {hotspot.osm.nearest_fire_station_longitude} E
+                </p>
+              )}
+            </div>
+
+            {/* Persistence & Multi-Pass Statistics */}
+            <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[9px] text-slate-400 block">30-Day Persistence</span>
+                <span className="text-sm font-bold text-orange-400">{hotspot.osm?.persistence_30d || `${Math.round((hotspot.persistence || 0) * 100)}%`}</span>
               </div>
-              <div className="bg-dark-950 p-1.5 rounded border border-dark-750">
-                <span className="text-[10px] text-slate-400 block">Persistence</span>
-                <span className="text-sm font-bold text-orange-400">{Math.round(hotspot.persistence * 100)}%</span>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[9px] text-slate-400 block">30-Day Hits / Active</span>
+                <span className="text-sm font-bold text-white">{hotspot.osm?.hits_30d || '1'} hits ({hotspot.osm?.active_days_30d || '1'}d)</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[9px] text-slate-400 block">Mean / Max FRP</span>
+                <span className="text-xs font-bold text-slate-200">{hotspot.osm?.mean_frp || 'N/A'} / {hotspot.osm?.max_frp || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[9px] text-slate-400 block">Night / High Conf Ratio</span>
+                <span className="text-xs font-bold text-slate-200">{hotspot.osm?.night_ratio || 'N/A'} / {hotspot.osm?.high_confidence_ratio || 'N/A'}</span>
               </div>
             </div>
 
-            {hotspot.historical_trend && (
-              <div>
-                <span className="text-[10px] font-mono text-slate-400 block mb-1">FRP Intensity Trend (MW)</span>
-                <div className="h-20 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={hotspot.historical_trend}>
-                      <XAxis dataKey="date" stroke="#64748b" fontSize={9} />
-                      <YAxis stroke="#64748b" fontSize={9} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '10px' }}
-                      />
-                      <Bar dataKey="frp" fill="#f97316" radius={[2, 2, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+            {/* Infrastructure & Distance Context */}
+            <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Distance to Road</span>
+                <span className="text-slate-200 font-semibold">{hotspot.osm?.distance_to_nearest_road_m || 'N/A'}</span>
               </div>
-            )}
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Road Length (1km)</span>
+                <span className="text-slate-200 font-semibold">{hotspot.osm?.road_length_1km_m || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Distance to Building</span>
+                <span className="text-slate-200 font-semibold">{hotspot.osm?.distance_to_nearest_building_m || 'N/A'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Buildings (1km / 5km)</span>
+                <span className="text-slate-200 font-semibold">{hotspot.osm?.building_count_1km || '0'} / {hotspot.osm?.building_count_5000m || '0'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Industrial (500m)</span>
+                <span className="text-slate-200 font-semibold">{hotspot.osm?.industrial_area_count_500m || '0'}</span>
+              </div>
+              <div className="bg-dark-950 p-2 rounded border border-dark-750">
+                <span className="text-[10px] text-slate-400 block">Industrial (5km)</span>
+                <span className="text-slate-200 font-semibold">{hotspot.osm?.industrial_area_count_5000m || '0'}</span>
+              </div>
+            </div>
           </div>
         </div>
 
